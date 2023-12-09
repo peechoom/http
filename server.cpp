@@ -25,6 +25,7 @@
 #define BUFFER_SIZE 2048
 #define BLOCK_SIZE 64
 
+const char TERMINATE_HEADER[4] = {'\r', '\n', '\r', '\n',};
 const std::string path = "/home/alec/Documents/misc programming/http/siteFiles";
 set<string> allowed;
 bool online = false;
@@ -36,7 +37,7 @@ void sendMessage(int socket, const string& message, const string& filepath) {
     cout << "sending header: \n";
 
     auto len = message.size();
-
+    cout << "len: " << len << '\n';
     const char *x = message.c_str();
 
     //FILE *fp = fdopen(socket, "a+");
@@ -68,7 +69,6 @@ void sendMessage(int socket, const string& message, const string& filepath) {
         cerr << "file \"" << filepath << "\" DNE\n";
         return;
     }
-    auto size = filesystem::file_size(filepath);
 
     std::ifstream inputFile(filepath, std::ios::binary);
     if (!inputFile.is_open()) {
@@ -77,13 +77,17 @@ void sendMessage(int socket, const string& message, const string& filepath) {
     }
 
     cout << "opening file\n";
-    // Read the content of the image into a vector
-    std::vector<char> fileData(std::istreambuf_iterator<char>(inputFile), {});
-    char *data = fileData.data();
-    auto n = fileData.size();
+    char data[BLOCK_SIZE];
+    ssize_t bytesWritten;
+    auto n = filesystem::file_size(filepath);
 
-    while(n > 0) {
-        ssize_t bytesWritten;
+    //differentiate from header and body
+    write(socket, TERMINATE_HEADER, 4);
+    while(n > 0 && inputFile.good()) {
+        inputFile.read(data, BLOCK_SIZE);
+        for(char i : data) {
+            cout << i;
+        }
         if(n < BLOCK_SIZE) {
             bytesWritten = write(socket, data, n);
         } else {
@@ -97,7 +101,6 @@ void sendMessage(int socket, const string& message, const string& filepath) {
             cerr << "connection closed\n";
             return;
         }
-        data += bytesWritten;
         n -= bytesWritten;
     }
     cout << "file sent!\n";
@@ -156,9 +159,6 @@ void *handleClient(void *arg) {
         cout << "couldnt allocate more memory!";
     }
     req->socket = sock;
-
-//    int flags = fcntl(req->socket, F_GETFL, 0);
-//    fcntl(req->socket, F_SETFL, flags | O_NONBLOCK);
 
     respond(std::move(req));
 
