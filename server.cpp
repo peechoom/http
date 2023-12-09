@@ -25,7 +25,7 @@
 #define BUFFER_SIZE 2048
 #define BLOCK_SIZE 64
 
-const char TERMINATE_HEADER[4] = {'\r', '\n', '\r', '\n',};
+const char TERMINATE_HEADER[2] = {'\r', '\n'};
 const std::string path = "/home/alec/Documents/misc programming/http/siteFiles";
 set<string> allowed;
 bool online = false;
@@ -34,12 +34,8 @@ const string notFound = "HTTP/1.1 404 Not Found\r\n"
                         "Content-Length: 0";
 
 void sendMessage(int socket, const string& message, const string& filepath) {
-    cout << "sending header: \n";
-
     auto len = message.size();
-    cout << "len: " << len << '\n';
     const char *x = message.c_str();
-
     //FILE *fp = fdopen(socket, "a+");
 
     while(len > 0) {
@@ -82,12 +78,14 @@ void sendMessage(int socket, const string& message, const string& filepath) {
     auto n = filesystem::file_size(filepath);
 
     //differentiate from header and body
-    write(socket, TERMINATE_HEADER, 4);
+    write(socket, TERMINATE_HEADER, 2);
     while(n > 0 && inputFile.good()) {
         inputFile.read(data, BLOCK_SIZE);
+        cout << n << '\n';
         for(char i : data) {
             cout << i;
         }
+        cout << "\n---------\n";
         if(n < BLOCK_SIZE) {
             bytesWritten = write(socket, data, n);
         } else {
@@ -108,7 +106,6 @@ void sendMessage(int socket, const string& message, const string& filepath) {
 
 void respond(unique_ptr<httpRequest> req) {
     string response = "HTTP/1.1 ", file;
-    unsigned long fileSize = 0;
     string t = req->target;
 
     if(req->method == GET && allowed.find(req->target) != allowed.end()) {
