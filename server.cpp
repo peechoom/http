@@ -14,8 +14,8 @@
 #include <set>
 #include <filesystem>
 #include <fstream>
-#include <vector>
 #include <thread>
+#include <csignal>
 
 
 #include "http.cpp"
@@ -23,21 +23,22 @@
 #define HTTP_PORT "8080"
 #define LISTEN_QUEUE_LEN 8
 #define BUFFER_SIZE 2048
-#define BLOCK_SIZE 64
+#define BLOCK_SIZE 1024
 
 const char TERMINATE_HEADER[2] = {'\r', '\n'};
+//TODO: make this work wherever
 const std::string path = "/home/alec/Documents/misc programming/http/siteFiles";
 set<string> allowed;
-bool online = false;
 bool running = false;
+int boundSocket = -1;
 const string notFound = "HTTP/3 404\r\n"
                         "Content-Length: 0";
 
 void sendMessage(int socket, const string& message, const string& filepath) {
     auto len = message.size();
     const char *x = message.c_str();
-    //FILE *fp = fdopen(socket, "a+");
-    cout << "sending file \"" << filepath << "\"\n";
+    cerr << "sending file \"" << filepath << "\"\n";
+
     while(len > 0) {
         ssize_t bytesWritten;
         if(message.size() < BLOCK_SIZE) {
@@ -86,7 +87,6 @@ void sendMessage(int socket, const string& message, const string& filepath) {
         } else {
             bytesWritten = write(socket, data, BLOCK_SIZE);
         }
-        //cout << "wrote " << bytesWritten << " bytes\n";
         if(bytesWritten < 0) {
             cerr << "error writing file to socket\n";
             return;
@@ -96,7 +96,6 @@ void sendMessage(int socket, const string& message, const string& filepath) {
         }
         n -= bytesWritten;
     }
-    cout << "file sent!\n";
 }
 
 void respond(unique_ptr<httpRequest> req) {
@@ -107,10 +106,9 @@ void respond(unique_ptr<httpRequest> req) {
         response.append("200\r\nContent-Type: ");
         auto idx = t.find('.');
         if(idx == string::npos) {
-            cout << "idx in error\n";
+            cerr << "idx in error\n";
         }
 
-        //cout << "index: " << idx << '\n';
 
         if(t.find(".html")        != string::npos) {
             response.append("text/html");
@@ -123,22 +121,19 @@ void respond(unique_ptr<httpRequest> req) {
         }else if(t.find(".ico")  != string::npos) {
             response.append("image/x-icon");
         } else {
-            cout << "unsupported filetype";
+            cerr << "unsupported filetype: " << t << '\n';
             sendMessage(req->socket, notFound, file);
         }
 
+
         response.append("\r\nContent-Length: ");
         if(!filesystem::exists(path + t)) {
-            cout << "file " << path << t << " does not exist\n";
-        }
-        cout << "filesize: " << filesystem::file_size(path + t) << '\n';
-        response.append(to_string(filesystem::file_size(path + t)).append("\r\n"));
-        file = path + t;
-        const char *data = response.c_str();
-        for(int i = 0; i < response.size(); i++) {
-            if(data[i] != '\r') {
-                cout << data[i];
-            }
+            cerr << "file " << path << t << " does not exist\n";
+            response.clear();
+            response.append(notFound);
+        } else {
+            response.append(to_string(filesystem::file_size(path + t)).append("\r\n"));
+            file = path + t;
         }
     } else {
         cerr << "File not found: " << req->target << '\n';
@@ -151,29 +146,37 @@ void respond(unique_ptr<httpRequest> req) {
 void *handleClient(void *arg) {
     int sock = (int) (long) arg;
     char buffer[BUFFER_SIZE] = {};
-
-    ssize_t bytes = read(sock, buffer, BUFFER_SIZE);
-
+    read(sock, buffer, BUFFER_SIZE);
     unique_ptr<httpRequest> req(new httpRequest(buffer, BUFFER_SIZE)); //TODO this should be bytes but bytes always =1
     if(!req) {
-        cout << "couldn't allocate more memory!";
+        cerr << "couldn't allocate more memory!";
     }
     req->socket = sock;
-
     respond(std::move(req));
-
     close(sock);
 }
 
+void sigHandler(int) {
+    cout << "shutting down\n";
+    running = false;
+    close(boundSocket);
+    exit(0);
+}
+
 int startServer() {
+
+    struct sigaction sig{};
+    sig.sa_flags = 0;
+    sigemptyset(&sig.sa_mask);
+    sig.sa_handler = sigHandler;
+    sigaction(SIGINT, &sig, nullptr);
+    sigaction(SIGTERM, &sig, nullptr);
+    sigaction(SIGKILL, &sig, nullptr);
+
     // Prepare a description of server address criteria.
     struct addrinfo addrCriteria{};
     memset(&addrCriteria, 0, sizeof(addrCriteria));
-    if(online) {
-        addrCriteria.ai_family = AF_INET;
-    } else {
-        addrCriteria.ai_family = AF_UNIX;
-    }
+    addrCriteria.ai_family = AF_INET;
     addrCriteria.ai_flags = AI_PASSIVE;
     addrCriteria.ai_socktype = SOCK_STREAM;
     addrCriteria.ai_protocol = IPPROTO_TCP;
@@ -190,18 +193,18 @@ int startServer() {
         exit(1);
     }
 
-    int servSock = socket(servAddr->ai_family, servAddr->ai_socktype, servAddr->ai_protocol);
+    boundSocket = socket(servAddr->ai_family, servAddr->ai_socktype, servAddr->ai_protocol);
 
-    if(servSock < 0) {
+    if(boundSocket < 0) {
         perror("cant create socket");
         exit(1);
     }
 
-    if(bind(servSock, servAddr->ai_addr, servAddr->ai_addrlen) != 0) {
+    if(bind(boundSocket, servAddr->ai_addr, servAddr->ai_addrlen) != 0) {
         perror("cant bind socket");
         exit(1);
     }
-    if(listen(servSock, LISTEN_QUEUE_LEN) != 0) {
+    if(listen(boundSocket, LISTEN_QUEUE_LEN) != 0) {
         perror("couldn't listen to port");
         exit(1);
     }
@@ -210,14 +213,14 @@ int startServer() {
 
     running = true;
     while(running) {
-        int sock = accept(servSock, (struct sockaddr *) &clientAddr, &clientAddrLen);
+        int sock = accept(boundSocket, (struct sockaddr *) &clientAddr, &clientAddrLen);
 
         pthread_t clientThread;
         pthread_create(&clientThread, nullptr, handleClient, (void *) (long) sock);
         //pthread_join(clientThread, nullptr);
         pthread_detach(clientThread);
     }
-    close(servSock);
+    close(boundSocket);
 
 }
 
@@ -225,9 +228,6 @@ inline void initializeAllowedSet() {
 
     for (const auto & entry : filesystem::directory_iterator(path)) {
         string p = entry.path();
-//        if(p.find(".css") != string::npos) {
-//            continue;
-//        }
         string s;
         for(auto i = path.size(); i < p.size(); i++) {
             s += p[i];
@@ -237,9 +237,6 @@ inline void initializeAllowedSet() {
 }
 
 int main(int argc, char *argv[]) {
-    if(argc == 2 && strcmp(argv[1], "online") == 0) {
-        online = true;
-    }
     initializeAllowedSet();
     startServer();
 }
