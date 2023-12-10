@@ -30,14 +30,14 @@ const std::string path = "/home/alec/Documents/misc programming/http/siteFiles";
 set<string> allowed;
 bool online = false;
 bool running = false;
-const string notFound = "HTTP/1.1 404 Not Found\r\n"
+const string notFound = "HTTP/3 404\r\n"
                         "Content-Length: 0";
 
 void sendMessage(int socket, const string& message, const string& filepath) {
     auto len = message.size();
     const char *x = message.c_str();
     //FILE *fp = fdopen(socket, "a+");
-
+    cout << "sending file \"" << filepath << "\"\n";
     while(len > 0) {
         ssize_t bytesWritten;
         if(message.size() < BLOCK_SIZE) {
@@ -47,7 +47,7 @@ void sendMessage(int socket, const string& message, const string& filepath) {
         }
 
         if(bytesWritten < 0) {
-            cerr << "error writing to socket\n";
+            cerr << "error writing header to socket\n";
             return;
         } else if(bytesWritten == 0) {
             cerr << "connection closed\n";
@@ -72,7 +72,7 @@ void sendMessage(int socket, const string& message, const string& filepath) {
         return;
     }
 
-    cout << "opening file\n";
+
     char data[BLOCK_SIZE];
     ssize_t bytesWritten;
     auto n = filesystem::file_size(filepath);
@@ -81,11 +81,6 @@ void sendMessage(int socket, const string& message, const string& filepath) {
     write(socket, TERMINATE_HEADER, 2);
     while(n > 0 && inputFile.good()) {
         inputFile.read(data, BLOCK_SIZE);
-        cout << n << '\n';
-        for(char i : data) {
-            cout << i;
-        }
-        cout << "\n---------\n";
         if(n < BLOCK_SIZE) {
             bytesWritten = write(socket, data, n);
         } else {
@@ -93,7 +88,7 @@ void sendMessage(int socket, const string& message, const string& filepath) {
         }
         //cout << "wrote " << bytesWritten << " bytes\n";
         if(bytesWritten < 0) {
-            cerr << "error writing to socket\n";
+            cerr << "error writing file to socket\n";
             return;
         } else if(bytesWritten == 0) {
             cerr << "connection closed\n";
@@ -105,11 +100,11 @@ void sendMessage(int socket, const string& message, const string& filepath) {
 }
 
 void respond(unique_ptr<httpRequest> req) {
-    string response = "HTTP/1.1 ", file;
+    string response = "HTTP/3 ", file;
     string t = req->target;
 
     if(req->method == GET && allowed.find(req->target) != allowed.end()) {
-        response.append("200 OK\r\nContent-Type: ");
+        response.append("200\r\nContent-Type: ");
         auto idx = t.find('.');
         if(idx == string::npos) {
             cout << "idx in error\n";
@@ -117,15 +112,15 @@ void respond(unique_ptr<httpRequest> req) {
 
         //cout << "index: " << idx << '\n';
 
-        if(t.find(".html") != string::npos) {
+        if(t.find(".html")        != string::npos) {
             response.append("text/html");
-        } else if(t.find(".css") != string::npos) {
+        } else if(t.find(".css")  != string::npos) {
             response.append("text/css");
         } else if(t.find(".jpeg") != string::npos) {
             response.append("image/jpeg");
-        }else if(t.find(".jpg") != string::npos) {
+        }else if(t.find(".jpg")  != string::npos) {
             response.append("image/jpg");
-        }else if(t.find(".ico") != string::npos) {
+        }else if(t.find(".ico")  != string::npos) {
             response.append("image/x-icon");
         } else {
             cout << "unsupported filetype";
@@ -136,9 +131,17 @@ void respond(unique_ptr<httpRequest> req) {
         if(!filesystem::exists(path + t)) {
             cout << "file " << path << t << " does not exist\n";
         }
+        cout << "filesize: " << filesystem::file_size(path + t) << '\n';
         response.append(to_string(filesystem::file_size(path + t)).append("\r\n"));
         file = path + t;
+        const char *data = response.c_str();
+        for(int i = 0; i < response.size(); i++) {
+            if(data[i] != '\r') {
+                cout << data[i];
+            }
+        }
     } else {
+        cerr << "File not found: " << req->target << '\n';
         response = notFound;
     }
 
@@ -153,7 +156,7 @@ void *handleClient(void *arg) {
 
     unique_ptr<httpRequest> req(new httpRequest(buffer, BUFFER_SIZE)); //TODO this should be bytes but bytes always =1
     if(!req) {
-        cout << "couldnt allocate more memory!";
+        cout << "couldn't allocate more memory!";
     }
     req->socket = sock;
 
