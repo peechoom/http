@@ -20,7 +20,7 @@
 
 #include "http.cpp"
 
-#define HTTP_PORT "8080"
+#define HTTP_PORT "8000"
 #define LISTEN_QUEUE_LEN 8
 #define BUFFER_SIZE 2048
 #define BLOCK_SIZE 1024
