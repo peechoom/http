@@ -107,7 +107,7 @@ public:
             responseCode = notFound;
             return;
         }
-        responseCode = "200 OK";
+        responseCode = "200";
         auto idx = t.find('.');
 
         if(t.find(".html") != string::npos || t.find(".css") != string::npos) {

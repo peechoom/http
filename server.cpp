@@ -33,15 +33,17 @@ int boundSocket = -1;
 const string notFound = "HTTP/3 404\r\n"
                         "Content-Length: 0";
 
-void sendMessage(int socket, const string& message, const string& filepath) {
-    auto len = message.size();
-    const char *x = message.c_str();
-    cerr << "sending file \"" << filepath << "\"\n";
+void sendMessage(int socket, httpResponse &response) {
+    string header = response.header();
+
+    auto len = header.size();
+    const char *x = header.c_str();
+    cout << "sending file \"" << response.filepath << "\"\n";
 
     while(len > 0) {
         ssize_t bytesWritten;
-        if(message.size() < BLOCK_SIZE) {
-            bytesWritten = write(socket, x, message.size());
+        if(header.size() < BLOCK_SIZE) {
+            bytesWritten = write(socket, x, header.size());
         } else {
             bytesWritten = write(socket, x, BLOCK_SIZE);
         }
@@ -58,15 +60,15 @@ void sendMessage(int socket, const string& message, const string& filepath) {
     }
 
 
-    if(filepath.empty()) {
+    if(response.filepath.empty()) {
         return;
     }
-    if(!filesystem::exists(filepath)) {
-        cerr << "file \"" << filepath << "\" DNE\n";
+    if(!filesystem::exists(response.filepath)) {
+        cerr << "file \"" << response.filepath << "\" DNE\n";
         return;
     }
 
-    std::ifstream inputFile(filepath, std::ios::binary);
+    std::ifstream inputFile(response.filepath, std::ios::binary);
     if (!inputFile.is_open()) {
         std::cerr << "Error opening image file." << std::endl;
         return;
@@ -75,10 +77,8 @@ void sendMessage(int socket, const string& message, const string& filepath) {
 
     char data[BLOCK_SIZE];
     ssize_t bytesWritten;
-    auto n = filesystem::file_size(filepath);
+    auto n = filesystem::file_size(response.filepath);
 
-    //differentiate from header and body
-    write(socket, TERMINATE_HEADER, 2);
     while(n > 0 && inputFile.good()) {
         inputFile.read(data, BLOCK_SIZE);
         if(n < BLOCK_SIZE) {
@@ -97,61 +97,16 @@ void sendMessage(int socket, const string& message, const string& filepath) {
     }
 }
 
-void respond(unique_ptr<httpRequest> req) {
-    string response = "HTTP/3 ", file;
-    string t = req->target;
-
-    if(req->method == GET && allowed.find(req->target) != allowed.end()) {
-        response.append("200\r\nContent-Type: ");
-        auto idx = t.find('.');
-        if(idx == string::npos) {
-            cerr << "idx in error\n";
-        }
-
-
-        if(t.find(".html")        != string::npos) {
-            response.append("text/html");
-        } else if(t.find(".css")  != string::npos) {
-            response.append("text/css");
-        } else if(t.find(".jpeg") != string::npos) {
-            response.append("image/jpeg");
-        }else if(t.find(".jpg")  != string::npos) {
-            response.append("image/jpg");
-        }else if(t.find(".ico")  != string::npos) {
-            response.append("image/x-icon");
-        } else {
-            cerr << "unsupported filetype: " << t << '\n';
-            sendMessage(req->socket, notFound, file);
-        }
-
-
-        response.append("\r\nContent-Length: ");
-        if(!filesystem::exists(path + t)) {
-            cerr << "file " << path << t << " does not exist\n";
-            response.clear();
-            response.append(notFound);
-        } else {
-            response.append(to_string(filesystem::file_size(path + t)).append("\r\n"));
-            file = path + t;
-        }
-    } else {
-        cerr << "File not found: " << req->target << '\n';
-        response = notFound;
-    }
-
-    sendMessage(req->socket, response, file);
-}
-
 void *handleClient(void *arg) {
     int sock = (int) (long) arg;
     char buffer[BUFFER_SIZE] = {};
     read(sock, buffer, BUFFER_SIZE);
-    unique_ptr<httpRequest> req(new httpRequest(buffer, BUFFER_SIZE)); //TODO this should be bytes but bytes always =1
-    if(!req) {
-        cerr << "couldn't allocate more memory!";
-    }
-    req->socket = sock;
-    respond(std::move(req));
+
+    httpRequest req(buffer, BUFFER_SIZE); //TODO this should be bytes but bytes always =1
+    httpResponse resp(allowed, req);
+
+    sendMessage(sock, resp);
+
     close(sock);
 }
 
