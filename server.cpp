@@ -25,6 +25,8 @@
 #define BUFFER_SIZE 2048
 #define BLOCK_SIZE 1024
 
+using namespace std;
+
 const char TERMINATE_HEADER[2] = {'\r', '\n'};
 //TODO: make this work wherever
 set<string> allowed;
@@ -178,19 +180,21 @@ int startServer() {
 
 }
 
-inline void initializeAllowedSet() {
-
-    for (const auto & entry : filesystem::directory_iterator(path)) {
+inline void addToFileset(const string& filepath) {
+    static const unsigned long len = filepath.size();
+    for (const auto & entry : filesystem::directory_iterator(filepath)) {
         string p = entry.path();
-        string s;
-        for(auto i = path.size(); i < p.size(); i++) {
-            s += p[i];
+        cout << "adding " << p << '\n';
+        if(filesystem::is_directory(p)) {
+            addToFileset(p);
+        } else {
+            allowed.insert(p.substr(len));
         }
-        allowed.insert(s);
     }
 }
 
 int main(int argc, char *argv[]) {
-    initializeAllowedSet();
+    path = "/home/alec/Documents/misc programming/http/siteFiles";
+    addToFileset(path);
     startServer();
 }

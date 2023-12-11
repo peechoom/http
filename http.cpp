@@ -16,21 +16,21 @@
 #define IS_NEWLINE (buffer[i] == '\n' || buffer[i] == '\r')
 #define IS_NOT_NEWLINE (buffer[i] != '\n' && buffer[i] != '\r')
 
-using namespace std;
-
-const std::string path = "/home/alec/Documents/misc programming/http/siteFiles";
+std::string path;
 
 typedef enum methods {GET, POST, HEAD, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH, NIL} httpMethod;
 
 class httpRequest {
 public:
+
     int socket = -1;
     httpMethod method;
-    string target;
-    string version;
-    map<string, string> headers;
+    std::string target;
+    std::string version;
+    std::map<std::string, std::string> headers;
 
     httpRequest(char *buffer, ssize_t n) {
+        using namespace std;
         stringstream ss;
         //parse header
         ssize_t i = 0;
@@ -92,22 +92,24 @@ public:
 
 class httpResponse {
 private:
-    const string CRLF = "\r\n";
-    const string notFound = "404 Not found";
+    const std::string CRLF = "\r\n";
+    const std::string notFound = "404 Not found";
 public:
-    string responseCode; //ex. 200 OK, 404 Not Found
-    string version = "HTTP/3"; //for images, use HTTP/3
-    string filepath;
-    map<string, string> headers;
+    std::string responseCode; //ex. 200 OK, 404 Not Found
+    std::string version = "HTTP/3"; //for images, use HTTP/3
+    std::string filepath;
+    std::map<std::string, std::string> headers;
 
     //constructor generates response
-    httpResponse(set<string> allowedResources, httpRequest& req) {
+    httpResponse(const std::set<std::string>& allowedResources, const httpRequest& req) {
+        using namespace std;
         const string& t = req.target;
-        if(req.method != GET || allowedResources.find(req.target) == allowedResources.end()) {
+        if(req.method != GET || allowedResources.find(t) == allowedResources.end()) {
             responseCode = notFound;
+            cerr << "client requested illegal resource " << t << '\n';
             return;
         }
-        responseCode = "200";
+        responseCode = "200 OK";
         auto idx = t.find('.');
 
         if(t.find(".html") != string::npos || t.find(".css") != string::npos) {
@@ -117,12 +119,14 @@ public:
             headers["Content-Type:"] = "image/";
         } else {
             responseCode = notFound;
+            cerr << "filetype " << t << " is illegal\n";
             return;
         }
         headers["Content-Type:"].append(t.substr(idx + 1));
 
         if(!filesystem::exists(path + t)) {
             responseCode = notFound;
+            cerr << "could not find file " << path + t << '\n';
             return;
         }
         filepath = path + t;
@@ -135,7 +139,8 @@ public:
      * be printed immediately after
      * @return  the complete header as a string
      */
-    string header() {
+    std::string header() {
+        using namespace std;
         stringstream ss;
         ss << version << ' ';
         ss << responseCode << CRLF;
