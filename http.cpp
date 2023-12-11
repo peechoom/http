@@ -18,13 +18,13 @@
 
 using namespace std;
 
-
+const std::string path = "/home/alec/Documents/misc programming/http/siteFiles";
 
 typedef enum methods {GET, POST, HEAD, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH, NIL} httpMethod;
 
 class httpRequest {
 public:
-    int socket;
+    int socket = -1;
     httpMethod method;
     string target;
     string version;
@@ -90,5 +90,64 @@ public:
     }
 };
 
+class httpResponse {
+private:
+    const string CRLF = "\r\n";
+    const string notFound = "404 Not found";
+public:
+    string responseCode; //ex. 200 OK, 404 Not Found
+    string version = "HTTP/3"; //for images, use HTTP/3
+    string filepath;
+    map<string, string> headers;
 
+    //constructor generates response
+    httpResponse(set<string> allowedResources, httpRequest& req) {
+        const string& t = req.target;
+        if(req.method != GET || allowedResources.find(req.target) == allowedResources.end()) {
+            responseCode = notFound;
+            return;
+        }
+        responseCode = "200 OK";
+        auto idx = t.find('.');
+
+        if(t.find(".html") != string::npos || t.find(".css") != string::npos) {
+            headers["Content-Type:"] = "text/";
+        } else if(t.find(".jpeg") != string::npos || t.find(".jpg") != string::npos ||
+                  t.find(".png")  != string::npos) {
+            headers["Content-Type:"] = "image/";
+        } else {
+            responseCode = notFound;
+            return;
+        }
+        headers["Content-Type:"].append(t.substr(idx + 1));
+
+        if(!filesystem::exists(path + t)) {
+            responseCode = notFound;
+            return;
+        }
+        filepath = path + t;
+        headers["Content-Length:"] = to_string(filesystem::file_size(filepath));
+
+
+    }
+    /**
+     * assembles header with blank lines at the end so that the file may
+     * be printed immediately after
+     * @return  the complete header as a string
+     */
+    string header() {
+        stringstream ss;
+        ss << version << ' ';
+        ss << responseCode << CRLF;
+        if(responseCode == notFound) {
+            return ss.str();
+        }
+        for(const auto& it : headers) {
+            ss << it.first << ' ';
+            ss << it.second << CRLF;
+        }
+        ss << CRLF;
+        return ss.str();
+    }
+};
 

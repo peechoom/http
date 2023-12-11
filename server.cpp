@@ -27,7 +27,6 @@
 
 const char TERMINATE_HEADER[2] = {'\r', '\n'};
 //TODO: make this work wherever
-const std::string path = "/home/alec/Documents/misc programming/http/siteFiles";
 set<string> allowed;
 bool running = false;
 int boundSocket = -1;
