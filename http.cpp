@@ -8,12 +8,16 @@
 #include <memory>
 #include <map>
 #include <iostream>
+#include <vector>
+#include <cstring>
+#include <set>
+#include <filesystem>
+#include <unistd.h>
 
-
+#define BUFFER_SIZE 1024
 #define IS_NEWLINE (buffer[i] == '\n' || buffer[i] == '\r')
 #define IS_NOT_NEWLINE (buffer[i] != '\n' && buffer[i] != '\r')
 
-std::string path;
 
 typedef enum methods {GET, POST, HEAD, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH, NIL} httpMethod;
 
@@ -89,6 +93,63 @@ public:
             }
         }
     }
+    httpRequest(int socket) {
+        using namespace std;
+        char buffer[BUFFER_SIZE];
+        FILE *sock = fdopen(socket, "a+");
+
+        fscanf(sock, "%1023s\r\n", buffer);
+
+        char meth[9], reso[BUFFER_SIZE], ver[11];
+        if(sscanf("%8s %1023s %10s\r\n", meth, reso, ver) != 3) {
+            cerr << "something went wrong reading the header";
+        }
+
+        if(strcmp(meth, "GET") == 0) {
+            method = GET;
+        } else if(strcmp(meth, "POST") == 0) {
+            method = POST;
+        } else {
+            cout << "HTTP method " << meth << " requested but not supported\n";
+            method = NIL;
+            return;
+        }
+        version = string(ver);
+        target = string(reso);
+
+        //TODO read characters line by line and put into map
+        //TODO if you run out, pause reading and scan in more chars
+        //TODO probably have to read character by character
+
+        bool endOfHeader = false;
+        //TODO ensure this breaks when it sees \r\n\r\n
+        while(fscanf(sock, "%1023s\r\n", buffer) != 1) {
+            ulong j = 0;
+            string key, value;
+            while(j < BUFFER_SIZE && buffer[j] != ':') {
+                key += buffer[j];
+                j++;
+            }
+            j += 2;
+            while(j < BUFFER_SIZE && buffer[j] && (buffer[j] != '\n' && buffer[j] != '\r')) {
+                value += buffer[j];
+                j++;
+            }
+            if(!key.empty() && !value.empty()) {
+                headers[key] = value;
+            }
+        }
+        fclose(sock);
+        std::vector<char> binary;
+        ssize_t bytes;
+        read(socket, buffer, 2); //read CRLF, MIGHT NOT BE NECESSARY
+        while((bytes = read(socket, buffer, BUFFER_SIZE)) > 0) {
+            for(int i = 0; i < bytes; i++) {
+                binary.push_back(buffer[i]);
+            }
+        }
+
+    }
 };
 
 class httpResponse {
@@ -102,7 +163,7 @@ public:
     std::map<std::string, std::string> headers;
     std::string header;
     //constructor generates response
-    httpResponse(const std::set<std::string>& allowedResources, const httpRequest& req) {
+    httpResponse(const std::set<std::string>& allowedResources, const httpRequest& req, std::string resourcePath) {
         using namespace std;
         const string& t = req.target;
         if(req.method != GET || allowedResources.find(t) == allowedResources.end()) {
@@ -126,12 +187,12 @@ public:
         }
         headers["Content-Type:"].append(t.substr(idx + 1));
 
-        if(!filesystem::exists(path + t)) {
+        if(!filesystem::exists(resourcePath + t)) {
             responseCode = notFound;
-            cerr << "could not find file " << path + t << '\n';
+            cerr << "could not find file " << resourcePath + t << '\n';
             return;
         }
-        filepath = path + t;
+        filepath = resourcePath + t;
         headers["Content-Length:"] = to_string(filesystem::file_size(filepath));
 
 

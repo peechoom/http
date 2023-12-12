@@ -22,7 +22,6 @@
 
 #define HTTP_PORT "8000"
 #define LISTEN_QUEUE_LEN 8
-#define BUFFER_SIZE 2048
 #define BLOCK_SIZE 1024
 
 using namespace std;
@@ -31,6 +30,7 @@ using namespace std;
 set<string> allowed;
 bool running = false;
 int boundSocket = -1;
+string resourcePath;
 
 void sendMessage(int socket, httpResponse &response) {
     string header = response.getHeader();
@@ -99,14 +99,15 @@ void sendMessage(int socket, httpResponse &response) {
 void *handleClient(void *arg) {
     int sock = (int) (long) arg;
     char buffer[BUFFER_SIZE] = {};
-    read(sock, buffer, BUFFER_SIZE);
+    ssize_t bytes = read(sock, buffer, BUFFER_SIZE);
 
     httpRequest req(buffer, BUFFER_SIZE); //TODO this should be bytes but bytes always =1
-    httpResponse resp(allowed, req);
+    httpResponse resp(allowed, req, resourcePath);
 
     sendMessage(sock, resp);
 
     close(sock);
+    return nullptr;
 }
 
 void sigHandler(int) {
@@ -174,7 +175,7 @@ int startServer() {
         pthread_detach(clientThread);
     }
     close(boundSocket);
-
+    return 0;
 }
 
 inline void addToFileset(const string& directory) {
@@ -190,7 +191,7 @@ inline void addToFileset(const string& directory) {
 }
 
 int main(int argc, char *argv[]) {
-    path = "/home/alec/Documents/misc programming/http/siteFiles";
-    addToFileset(path);
+    resourcePath = "/home/alec/Documents/misc programming/http/siteFiles";
+    addToFileset(resourcePath);
     startServer();
 }
