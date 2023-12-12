@@ -10,9 +10,6 @@
 #include <iostream>
 
 
-#define URI_MAX 256
-#define VERSION_MAX 48
-
 #define IS_NEWLINE (buffer[i] == '\n' || buffer[i] == '\r')
 #define IS_NOT_NEWLINE (buffer[i] != '\n' && buffer[i] != '\r')
 
@@ -21,6 +18,8 @@ std::string path;
 typedef enum methods {GET, POST, HEAD, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH, NIL} httpMethod;
 
 class httpRequest {
+private:
+
 public:
 
     int socket = -1;
@@ -68,7 +67,9 @@ public:
 
 
         while(i < n && buffer[i] != EOF && buffer[i] != '\0') {
+            short newlineCount = 0;
             while(i < n && IS_NEWLINE) {
+                newlineCount++;
                 i++;
             }
 
@@ -99,7 +100,7 @@ public:
     std::string version = "HTTP/3"; //for images, use HTTP/3
     std::string filepath;
     std::map<std::string, std::string> headers;
-
+    std::string header;
     //constructor generates response
     httpResponse(const std::set<std::string>& allowedResources, const httpRequest& req) {
         using namespace std;
@@ -112,6 +113,7 @@ public:
         responseCode = "200 OK";
         auto idx = t.find('.');
 
+        //TODO refactor this to make it better
         if(t.find(".html") != string::npos || t.find(".css") != string::npos) {
             headers["Content-Type:"] = "text/";
         } else if(t.find(".jpeg") != string::npos || t.find(".jpg") != string::npos ||
@@ -135,11 +137,14 @@ public:
 
     }
     /**
-     * assembles header with blank lines at the end so that the file may
+     * assembles getHeader with blank lines at the end so that the file may
      * be printed immediately after
-     * @return  the complete header as a string
+     * @return  the complete getHeader as a string
      */
-    std::string header() {
+    std::string getHeader() {
+        if(!header.empty()) {
+            return header;
+        }
         using namespace std;
         stringstream ss;
         ss << version << ' ';

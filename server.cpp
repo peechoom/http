@@ -27,16 +27,13 @@
 
 using namespace std;
 
-const char TERMINATE_HEADER[2] = {'\r', '\n'};
 //TODO: make this work wherever
 set<string> allowed;
 bool running = false;
 int boundSocket = -1;
-const string notFound = "HTTP/3 404\r\n"
-                        "Content-Length: 0";
 
 void sendMessage(int socket, httpResponse &response) {
-    string header = response.header();
+    string header = response.getHeader();
 
     auto len = header.size();
     const char *x = header.c_str();
@@ -51,7 +48,7 @@ void sendMessage(int socket, httpResponse &response) {
         }
 
         if(bytesWritten < 0) {
-            cerr << "error writing header to socket\n";
+            cerr << "error writing getHeader to socket\n";
             return;
         } else if(bytesWritten == 0) {
             cerr << "connection closed\n";
@@ -180,11 +177,10 @@ int startServer() {
 
 }
 
-inline void addToFileset(const string& filepath) {
-    static const unsigned long len = filepath.size();
-    for (const auto & entry : filesystem::directory_iterator(filepath)) {
+inline void addToFileset(const string& directory) {
+    static const unsigned long len = directory.size();
+    for (const auto & entry : filesystem::directory_iterator(directory)) {
         string p = entry.path();
-        cout << "adding " << p << '\n';
         if(filesystem::is_directory(p)) {
             addToFileset(p);
         } else {
