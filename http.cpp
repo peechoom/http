@@ -23,7 +23,13 @@ typedef enum methods {GET, POST, HEAD, PUT, DELETE, CONNECT, OPTIONS, TRACE, PAT
 
 class httpRequest {
 private:
-
+    static inline ulong scanUntilCRLF(const char buffer[BUFFER_SIZE], size_t n = BUFFER_SIZE) {
+        ulong i = 0;
+        while(i < n && buffer[i] != '\r') {
+            ++i;
+        }
+        return i;
+    }
 public:
 
     int socket = -1;
@@ -93,16 +99,14 @@ public:
             }
         }
     }
-    httpRequest(int socket) {
+    explicit httpRequest(int socket) {
         using namespace std;
         char buffer[BUFFER_SIZE];
-        FILE *sock = fdopen(socket, "a+");
-
-        fscanf(sock, "%1023s\r\n", buffer);
+        read(socket, buffer, BUFFER_SIZE);
 
         char meth[9], reso[BUFFER_SIZE], ver[11];
-        if(sscanf("%8s %1023s %10s\r\n", meth, reso, ver) != 3) {
-            cerr << "something went wrong reading the header";
+        if(sscanf(buffer, "%8s %1023s %10s\r\n", meth, reso, ver) != 3) {
+            cerr << "something went wrong reading the header\n" ;
         }
 
         if(strcmp(meth, "GET") == 0) {
@@ -117,38 +121,62 @@ public:
         version = string(ver);
         target = string(reso);
 
-        //TODO read characters line by line and put into map
-        //TODO if you run out, pause reading and scan in more chars
-        //TODO probably have to read character by character
 
-        bool endOfHeader = false;
-        //TODO ensure this breaks when it sees \r\n\r\n
-        while(fscanf(sock, "%1023s\r\n", buffer) != 1) {
-            ulong j = 0;
-            string key, value;
-            while(j < BUFFER_SIZE && buffer[j] != ':') {
-                key += buffer[j];
-                j++;
+        ulong min = scanUntilCRLF(buffer) + 2;
+        ulong max = min + scanUntilCRLF(buffer + min, BUFFER_SIZE - min);
+
+        while(buffer[min] != '\r') {
+            while (max != BUFFER_SIZE && buffer[min] != '\r') {
+                ulong j = min;
+                string key, value;
+                while (j < BUFFER_SIZE && buffer[j] != ':') {
+                    key += buffer[j];
+                    j++;
+                }
+                j += 2;
+                while (j < BUFFER_SIZE && buffer[j] && (buffer[j] != '\n' && buffer[j] != '\r')) {
+                    value += buffer[j];
+                    j++;
+                }
+                if (!key.empty() && !value.empty()) {
+                    headers[key] = value;
+                }
+                min = max + 2;
+                max = min + scanUntilCRLF(buffer + min, BUFFER_SIZE - min);
             }
-            j += 2;
-            while(j < BUFFER_SIZE && buffer[j] && (buffer[j] != '\n' && buffer[j] != '\r')) {
-                value += buffer[j];
-                j++;
-            }
-            if(!key.empty() && !value.empty()) {
-                headers[key] = value;
+            if(max == BUFFER_SIZE) {
+                for(ulong i = min; i < BUFFER_SIZE; i++) {
+                    buffer[i - min] = buffer[i];
+                }
+                read(socket, buffer + min, BUFFER_SIZE - min);
+                min = 2;
+                max = scanUntilCRLF(buffer + min, BUFFER_SIZE - min);
             }
         }
-        fclose(sock);
+        long contentLen = 0;
+        if(auto x = headers.find("Content-Length"); x != headers.end()) {
+            for(char c : x->second) {
+                contentLen *= 10;
+                contentLen += (c - '0');
+            }
+        }
+        min += 2;
+        for(ulong i = min; i < BUFFER_SIZE; i++) {
+            buffer[i - min] = buffer[i];
+        }
+
         std::vector<char> binary;
-        ssize_t bytes;
-        read(socket, buffer, 2); //read CRLF, MIGHT NOT BE NECESSARY
-        while((bytes = read(socket, buffer, BUFFER_SIZE)) > 0) {
-            for(int i = 0; i < bytes; i++) {
-                binary.push_back(buffer[i]);
+        while(contentLen > 0) {
+            long m = contentLen < BUFFER_SIZE ? contentLen : BUFFER_SIZE;
+            binary.insert(binary.end(), buffer, buffer + m);
+            contentLen -= BUFFER_SIZE;
+            if(contentLen > 0) {
+                read(socket, buffer, BUFFER_SIZE);
             }
         }
-
+        for(char c : binary) {
+            cout << c;
+        }
     }
 };
 
