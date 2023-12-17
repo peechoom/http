@@ -122,8 +122,8 @@ public:
         target = string(reso);
 
 
-        ulong min = scanUntilCRLF(buffer) + 2;
-        ulong max = min + scanUntilCRLF(buffer + min, BUFFER_SIZE - min);
+        long min = scanUntilCRLF(buffer) + 2;
+        long max = min + scanUntilCRLF(buffer + min, BUFFER_SIZE - min);
 
         while(buffer[min] != '\r') {
             while (max != BUFFER_SIZE && buffer[min] != '\r') {
@@ -167,7 +167,7 @@ public:
         }
         std::vector<char> binary;
         while(contentLen > 0) {
-            long m = contentLen < BUFFER_SIZE - min ? contentLen : BUFFER_SIZE - min;
+            long m = contentLen < (BUFFER_SIZE - min) ? contentLen : BUFFER_SIZE - min;
             binary.insert(binary.end(), buffer, buffer + m);
             contentLen -= (BUFFER_SIZE - min);
             if(contentLen > 0) {

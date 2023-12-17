@@ -99,9 +99,8 @@ void sendMessage(int socket, httpResponse &response) {
 void *handleClient(void *arg) {
     int sock = (int) (long) arg;
     char buffer[BUFFER_SIZE] = {};
-    ssize_t bytes = read(sock, buffer, BUFFER_SIZE);
 
-    httpRequest req(buffer, BUFFER_SIZE); //TODO this should be bytes but bytes always =1
+    httpRequest req(sock); 
     httpResponse resp(allowed, req, resourcePath);
 
     sendMessage(sock, resp);
