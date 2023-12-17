@@ -157,12 +157,14 @@ public:
         if(auto x = headers.find("Content-Length"); x != headers.end()) {
             contentLen = atol(x->second.c_str());
         }
+        if(!contentLen) {
+            return;
+        }
+        
         min += 2;
         for(ulong i = min; i < BUFFER_SIZE; i++) {
             buffer[i - min] = buffer[i];
         }
-        //TODO if the size is greater tham the buffer size, this ^^^ will offset data to the front of the buffer,
-        //but the offset will cause the function to read junk data from the end of the buffer when the copy happnd
         std::vector<char> binary;
         while(contentLen > 0) {
             long m = contentLen < BUFFER_SIZE - min ? contentLen : BUFFER_SIZE - min;

@@ -191,7 +191,16 @@ inline void addToFileset(const string& directory) {
 }
 
 int main(int argc, char *argv[]) {
-    resourcePath = "/home/alec/Documents/http/siteFiles";
+    if(argc == 2) {
+        if(filesystem::exists(argv[1])) {
+            resourcePath = string(argv[1]);
+        } else {
+            resourcePath = "/home/alec/Documents/http/siteFiles";
+        }
+    } else {
+        resourcePath = "/home/alec/Documents/http/siteFiles";
+    }
+    cout << "server directory is: " << resourcePath << '\n';
     addToFileset(resourcePath);
     startServer();
 }
