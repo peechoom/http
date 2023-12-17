@@ -155,28 +155,29 @@ public:
         }
         long contentLen = 0;
         if(auto x = headers.find("Content-Length"); x != headers.end()) {
-            for(char c : x->second) {
-                contentLen *= 10;
-                contentLen += (c - '0');
-            }
+            contentLen = atol(x->second.c_str());
         }
         min += 2;
         for(ulong i = min; i < BUFFER_SIZE; i++) {
             buffer[i - min] = buffer[i];
         }
-
+        //TODO if the size is greater tham the buffer size, this ^^^ will offset data to the front of the buffer,
+        //but the offset will cause the function to read junk data from the end of the buffer when the copy happnd
         std::vector<char> binary;
         while(contentLen > 0) {
-            long m = contentLen < BUFFER_SIZE ? contentLen : BUFFER_SIZE;
+            long m = contentLen < BUFFER_SIZE - min ? contentLen : BUFFER_SIZE - min;
             binary.insert(binary.end(), buffer, buffer + m);
-            contentLen -= BUFFER_SIZE;
+            contentLen -= (BUFFER_SIZE - min);
             if(contentLen > 0) {
                 read(socket, buffer, BUFFER_SIZE);
+                min = 0;
             }
         }
+        cout << "binary size: " << binary.size() << '\n';
         for(char c : binary) {
             cout << c;
         }
+        cout << '\n';
     }
 };
 

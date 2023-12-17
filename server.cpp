@@ -191,7 +191,7 @@ inline void addToFileset(const string& directory) {
 }
 
 int main(int argc, char *argv[]) {
-    resourcePath = "/home/alec/Documents/misc programming/http/siteFiles";
+    resourcePath = "/home/alec/Documents/http/siteFiles";
     addToFileset(resourcePath);
     startServer();
 }
