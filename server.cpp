@@ -98,8 +98,7 @@ void sendMessage(int socket, httpResponse &response) {
 
 void *handleClient(void *arg) {
     int sock = (int) (long) arg;
-    char buffer[BUFFER_SIZE] = {};
-
+    
     httpRequest req(sock); 
     httpResponse resp(allowed, req, resourcePath);
 

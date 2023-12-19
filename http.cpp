@@ -21,6 +21,11 @@
 
 typedef enum methods {GET, POST, HEAD, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH, NIL} httpMethod;
 
+std::map<std::string, std::string> ContentTypes = {
+    {"html", "text/html"}, {"css", "text/css"}, {"jpeg", "image/jpeg"}, {"jpg", "image/jpg"},
+    {"png", "image/png"}, {"ico", "image/ico"}, {"js", "text/javascript"}
+};
+
 class httpRequest {
 private:
     static inline ulong scanUntilCRLF(const char buffer[BUFFER_SIZE], size_t n = BUFFER_SIZE) {
@@ -119,7 +124,12 @@ public:
             return;
         }
         version = string(ver);
-        target = string(reso);
+        
+        if(strcmp(reso, "/") == 0) {
+            target = "/index.html";
+        } else {
+            target = string(reso);
+        }
 
 
         long min = scanUntilCRLF(buffer) + 2;
@@ -205,19 +215,15 @@ public:
         responseCode = "200 OK";
         auto idx = t.find('.');
 
-        //TODO refactor this to make it better
-        if(t.find(".html") != string::npos || t.find(".css") != string::npos) {
-            headers["Content-Type:"] = "text/";
-        } else if(t.find(".jpeg") != string::npos || t.find(".jpg") != string::npos ||
-                  t.find(".png")  != string::npos) {
-            headers["Content-Type:"] = "image/";
-        } else {
+        auto seek = ContentTypes.find(t.substr(idx + 1));
+        if(seek == ContentTypes.end()) {
             responseCode = notFound;
-            cerr << "filetype " << t << " is illegal\n";
+            cerr << "content " << t << " not allowed\n";
             return;
-        }
-        headers["Content-Type:"].append(t.substr(idx + 1));
+        } 
 
+        headers["Content-Type:"] = seek->second;
+    
         if(!filesystem::exists(resourcePath + t)) {
             responseCode = notFound;
             cerr << "could not find file " << resourcePath + t << '\n';
